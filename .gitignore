@@ -1,0 +1,43 @@
+# Python cache and virtual environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+
+# Local tool and editor state
+.claude/
+
+# Temporary crawl outputs and debug artifacts
+*.png
+*.html
+*.json
+
+# Local one-off crawler/debug scripts in the workspace root
+/analyze_new_page.py
+/crawl_new_url.py
+/crawl_patient.py
+/crawl_simple.py
+/full_crawler.py
+/playwright_attempt.py
+/playwright_scraper.py
+/scraper.py
+/scraper_cffi.py
+/test_connection.py
+/test_other_page.py
+
+# Keep committed skill and docs JSON/HTML-free files tracked
+!skills/
+!skills/**/
+!skills/**/evals/
+!skills/**/evals/evals.json
+!docs/
+!docs/**/
+!docs/**/*.md
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
