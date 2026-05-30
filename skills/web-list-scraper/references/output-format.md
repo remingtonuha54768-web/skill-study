@@ -5,6 +5,7 @@
 Write a JSON array. Each item must contain:
 
 - `url`: normalized absolute URL
+- `title`: article title text corresponding to the URL
 - `isOutLink`: boolean
 - `isFileLink`: boolean
 - `isWechatLink`: boolean
@@ -15,18 +16,21 @@ Example:
 [
   {
     "url": "https://example.com/article/123",
+    "title": "Example article title",
     "isOutLink": false,
     "isFileLink": false,
     "isWechatLink": false
   },
   {
     "url": "https://cdn.example.net/report.pdf",
+    "title": "Annual report PDF",
     "isOutLink": true,
     "isFileLink": true,
     "isWechatLink": false
   },
   {
     "url": "https://mp.weixin.qq.com/s/abc123",
+    "title": "WeChat article title",
     "isOutLink": true,
     "isFileLink": false,
     "isWechatLink": true
@@ -53,6 +57,18 @@ Before deduplication and classification:
 2. Prefer `https` when the resolved page is `https`.
 3. Remove obvious duplicate fragments when they do not change the target resource.
 4. Keep query parameters when they appear to identify the resource.
+
+## Title extraction
+
+Each output item must include `title`, the article title corresponding to the exported URL.
+
+Use this priority order:
+
+1. Visible text of the primary article-detail link.
+2. The nearest title element inside the same article-list item, such as a heading, title span, or equivalent title node.
+3. A meaningful `title` attribute from the primary link when visible text is empty or generic.
+
+Normalize titles by trimming leading/trailing whitespace and collapsing repeated internal whitespace. Keep the title tied to the same list item as the URL. Do not open article-detail pages solely to fill or improve titles.
 
 ## `isOutLink` rule
 

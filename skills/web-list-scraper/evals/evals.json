@@ -31,11 +31,11 @@
     {
       "id": 3,
       "prompt": "请为我爬取 example.com 的资讯列表。把所有文章链接输出到一个以域名加时间命名的 json 文件里，每条记录都要有 url、isOutLink、isFileLink、isWechatLink。如果有 pdf 或 doc 下载链接，也要按文件链接标记出来；如果是微信公众号链接，也要单独标记出来。",
-      "expected_output": "The skill should explain or imply the required JSON filename pattern and record schema, preserve the classification requirements for external links, file links, and WeChat article links, and execute without a user-confirmation pause once the crawl scope is internally determined.",
+      "expected_output": "The skill should explain or imply the required JSON filename pattern and record schema, preserve the title and classification requirements for external links, file links, and WeChat article links, and execute without a user-confirmation pause once the crawl scope is internally determined.",
       "files": [],
       "expectations": [
         "The workflow uses internal analysis followed by automatic export rather than a confirm-then-export pause.",
-        "The final export contract includes the fields url, isOutLink, isFileLink, and isWechatLink.",
+        "The final export contract includes the fields url, title, isOutLink, isFileLink, and isWechatLink.",
         "The response uses or references the domain-plus-timestamp JSON filename pattern.",
         "The response preserves file-link classification for document-style URLs such as PDF or DOC links.",
         "The response preserves WeChat-link classification for URLs hosted on mp.weixin.qq.com.",
@@ -97,11 +97,12 @@
     {
       "id": 8,
       "prompt": "为我爬取 https://www.example.xxx/archive/ 下的所有文章链接。这个栏目分页很多，内容量很大；如果中途网络不稳定或者出现 SSL 连接问题，不要直接失败，要分批爬、记录进度、断点续爬，把失败页重试补齐。只要还有没完成的页或者最终链接数和网页实际文章数对不上，就不要结束。",
-      "expected_output": "The skill should recognize this as a large-scope crawl that requires batched execution, resumable progress tracking, retry handling for SSL or network failures, and a strict completion rule that forbids success while unfinished pages or validation mismatches remain.",
+      "expected_output": "The skill should recognize this as a large-scope crawl that requires fixed 5-page batched execution, resumable progress tracking, retry handling for SSL or network failures, and a strict completion rule that forbids success while unfinished pages or validation mismatches remain.",
       "files": [],
       "expectations": [
-        "The response uses batched crawling rather than assuming a single uninterrupted pass.",
+        "The response uses 5-page batched crawling rather than assuming a single uninterrupted pass.",
         "The response maintains resumable progress state such as completed pages, failed pages, or batch progress.",
+        "The workflow waits through a randomized cooldown after each completed batch before starting the next batch.",
         "The response treats SSL or transient network failures as retryable and resumable rather than immediate final failure.",
         "The response retries failed pages or unfinished batches instead of restarting blindly from zero.",
         "The workflow does not consider the task complete while unfinished pages remain or while exported count and actual article-list count still differ."
@@ -117,6 +118,50 @@
         "The response prefers actual pagination advancement over static page-label guessing when a next-page control is available.",
         "The response accounts for stopping when the next-page control disappears, disables, or no longer changes the list.",
         "The response uses observed traversal results as the authoritative basis for maximum page count."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "为我爬取 https://www.example.xxx/news/ 下的所有文章链接。为了避免封 IP，对任意网站都要低频爬取，每爬一页都增加一个随机的长 sleep；遇到 403、429、验证码或者空列表异常时不要继续猛爬，要退避或者停止说明。",
+      "expected_output": "The skill should apply low-pressure crawling to every site, use concurrency 1, add a randomized long sleep after every list-page attempt, use fixed 5-page batches when the target range has at least 5 pages, skip batching below 5 pages, use longer randomized cooldowns between batches, and back off or stop when rate-limit or blocking signals appear.",
+      "files": [],
+      "expectations": [
+        "The response applies conservative pacing to every website rather than only to visibly protected sites.",
+        "The crawl uses single-page traversal or concurrency 1 for list pages.",
+        "The workflow adds a randomized long sleep after every list-page attempt, including successful and failed pages.",
+        "The workflow splits target ranges of 5 or more list pages into batches of 5 pages.",
+        "The workflow does not split target ranges with fewer than 5 list pages into batches.",
+        "The workflow adds longer randomized cooldowns after every completed batch before crawling the next batch.",
+        "The workflow treats 403, 429, CAPTCHA, repeated empty lists, redirects, resets, and repeated timeouts as blocking or throttling signals.",
+        "The workflow backs off with longer randomized waits or stops with a clear explanation instead of increasing crawl pressure.",
+        "The workflow does not attempt to bypass login walls, CAPTCHA, paywalls, or access-control challenges."
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "为我爬取 https://www.example.xxx/news/ 下的所有文章链接。导出的 json 每条记录除了 url、isOutLink、isFileLink、isWechatLink，还要有 title 字段，存放这个链接对应的文章标题。",
+      "expected_output": "The skill should include a title field for every exported item, extract the title from the same article-list item as the URL, prefer the primary article link text or nearby title element, normalize title whitespace, and preserve all existing link classification fields.",
+      "files": [],
+      "expectations": [
+        "The final export contract includes the fields url, title, isOutLink, isFileLink, and isWechatLink.",
+        "The title is extracted from the same article-list item as the exported URL.",
+        "The workflow prefers visible text of the primary article-detail link for the title.",
+        "The workflow can fall back to a nearby title element or meaningful title attribute inside the same list item.",
+        "The workflow normalizes title whitespace.",
+        "The workflow does not open article-detail pages solely to fill or improve titles."
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "为我爬取 https://www.example.xxx/list/ 下的所有文章链接。每五页为一批，每爬取完一批都等待一个随机间隔再去爬取另一批；如果总页数低于五页就不要分批。",
+      "expected_output": "The skill should split crawling into fixed 5-page batches when the target range has at least 5 pages, skip batching below 5 pages, persist progress after each batch, and wait through a randomized cooldown before continuing to the next batch.",
+      "files": [],
+      "expectations": [
+        "The workflow uses fixed batches of 5 list pages.",
+        "The workflow does not create batches when the target page count is fewer than 5.",
+        "The workflow persists progress after each completed batch.",
+        "The workflow waits through a randomized interval after each completed batch before starting the next batch.",
+        "The workflow still applies per-page randomized long sleep and concurrency 1."
       ]
     }
   ]

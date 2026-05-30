@@ -25,6 +25,7 @@ Each item in the JSON array must have this structure:
 ```json
 {
   "url": "https://example.com/article/123",
+  "title": "Example article title",
   "isOutLink": false,
   "isFileLink": false,
   "isWechatLink": false
@@ -41,6 +42,7 @@ The task is only complete when the exported link count matches the actual articl
 - Ignore navigation, banners, footers, ads, sidebars, tag pages, recommendation modules, and pagination controls.
 - Prefer rendered-page inspection and realistic browsing behavior when the site is dynamic or mildly protected.
 - Prefer Playwright as the primary execution strategy when the site is dynamically rendered, relies on click-driven pagination, uses load-more interactions, or shows strong anti-bot behavior.
+- For every website, use low-pressure crawling by default: single-page traversal, no parallel page fetching, and a randomized long sleep after every list page attempt.
 - When the crawl scope is large or the network is unstable, use batched crawling and resumable progress tracking rather than trying to finish everything in one pass.
 - Do not guess when the expected link count or maximum page count is uncertain.
 - If the crawl scope is too uncertain to execute reliably, stop and explain the uncertainty instead of pausing for confirmation.
@@ -48,7 +50,31 @@ The task is only complete when the exported link count matches the actual articl
 - If the counts do not match, diagnose the issue, adjust the crawling logic, and retry.
 - Do not report completion while there are unfinished pages, unresolved failed pages, or validation mismatches.
 
-## Preferred anti-bot strategy: Playwright
+## Default crawl pacing
+
+Use conservative crawl pacing for every target site, even if the site does not appear protected.
+
+Required pacing rules:
+
+- Crawl list pages with concurrency `1`.
+- Add a randomized long sleep after every list page attempt, including successful pages, failed pages, and pages with no extracted links.
+- Use a default per-page sleep range of `15-60 seconds` unless the user explicitly asks for a slower range.
+- If the target range has fewer than `5` list pages, do not split it into batches.
+- If the target range has `5` or more list pages, split it into batches of `5` pages each.
+- After every completed batch, wait through a longer randomized cooldown, such as `3-10 minutes`, before starting the next batch.
+- Randomize wait durations and avoid fixed request intervals.
+- Persist progress before long sleeps and batch cooldowns so the crawl can resume safely if interrupted.
+- Do not open article-detail pages when the requested output only needs article-list links.
+
+If the site shows rate-limit or blocking signals, stop increasing pressure and switch to backoff:
+
+- Treat `403`, `429`, CAPTCHA/challenge pages, repeated empty list pages, unexpected login redirects, connection resets, or repeated timeouts as blocking or throttling signals.
+- Use exponential backoff with a longer randomized wait before retrying, such as `2-5 minutes`, then `10-30 minutes`.
+- Limit retries for the same page.
+- If the page remains blocked after limited retries, record it in the failed-page queue or stop with a clear explanation.
+- Do not attempt to bypass login walls, CAPTCHA, paywalls, or access-control challenges.
+
+## Preferred protected-site strategy: Playwright
 
 When the target site has strong anti-scraping behavior, default to Playwright-first execution instead of plain HTTP requests.
 
@@ -75,6 +101,8 @@ When Playwright is in use:
 - extract from the rendered DOM when that is the most reliable source
 - if useful, inspect the browser's real network responses to understand where list data is coming from
 - keep the crawl scoped to the user-requested domain or path even if the page loads auxiliary assets from elsewhere
+- keep one browser context for the crawl where practical so normal cookies and session state persist
+- still apply the default per-page randomized long sleep and batch cooldown rules
 
 Do not fall back to direct request scraping unless it is clearly sufficient and more reliable for the current target.
 
@@ -84,7 +112,8 @@ When the target scope is large, the page count is high, or the network is unreli
 
 Instead:
 
-- split the crawl into batches, such as a page range per batch
+- split the crawl into fixed batches of `5` list pages when the target range has `5` or more pages
+- do not split into batches when the target range has fewer than `5` pages
 - persist progress after each batch
 - keep a retry queue for failed pages
 - resume from the last unfinished point instead of restarting from zero
@@ -100,10 +129,13 @@ Prefer this strategy when:
 
 When using batched crawling:
 
-1. Divide the target page range into manageable batches.
-2. Crawl one batch at a time.
-3. After each batch, persist intermediate progress and accumulated results.
-4. Continue with the next unfinished batch.
+1. If the target page range has fewer than `5` list pages, crawl it as a single unbatched range.
+2. If the target page range has `5` or more list pages, divide it into batches of `5` pages each.
+3. Crawl one batch at a time.
+4. Apply the required randomized long sleep after each page attempt.
+5. After each batch, persist intermediate progress and accumulated results.
+6. Wait through a randomized batch cooldown before continuing unless the crawl is stopping.
+7. Continue with the next unfinished batch.
 
 Each batch should track:
 
@@ -136,9 +168,10 @@ Use this recovery order:
 
 1. Retry the same page a limited number of times.
 2. Increase wait time or timeout if the failure appears transient.
-3. Prefer Playwright-driven page access if direct requests are failing.
-4. If direct requests return incomplete content but the browser can render the page, trust the rendered browser result.
-5. Record the page in a failed-page queue if it still cannot be completed in the current pass.
+3. Apply a longer randomized backoff before retrying.
+4. Prefer Playwright-driven page access if direct requests are failing.
+5. If direct requests return incomplete content but the browser can render the page, trust the rendered browser result.
+6. Record the page in a failed-page queue if it still cannot be completed in the current pass.
 
 Examples of recoverable problems include:
 
@@ -229,16 +262,19 @@ After the analysis completes:
 
 1. Traverse all list pages within the determined page range.
    - Use Playwright by default when the site is dynamic, click-driven, or strongly protected.
-   - If the crawl is large or unstable, process the page range in batches and persist progress after each batch.
+   - If the target range has `5` or more list pages, process it in batches of `5` pages and persist progress after each batch.
+   - If the target range has fewer than `5` list pages, do not split it into batches.
+   - Always crawl with concurrency `1` and apply the default randomized long sleep after every list page attempt.
 2. Restrict extraction to anchors inside the internally confirmed article-list region.
-3. Normalize every extracted link to an absolute URL.
-4. Deduplicate links after normalization.
-5. Classify each link as `isOutLink`, `isFileLink`, and `isWechatLink`.
-6. Write the JSON file using the required filename pattern.
-7. Validate the exported link count against the actual article-list count observed across the crawled pages.
-8. If the counts do not match, analyze the page structure and the crawling logic, fix the issue, and crawl again.
-9. Only report completion when the counts match.
-10. Tell the user where the file was written and how many links were exported.
+3. Extract the article title that corresponds to each exported link.
+4. Normalize every extracted link to an absolute URL.
+5. Deduplicate links after normalization.
+6. Classify each link as `isOutLink`, `isFileLink`, and `isWechatLink`.
+7. Write the JSON file using the required filename pattern.
+8. Validate the exported link count against the actual article-list count observed across the crawled pages.
+9. If the counts do not match, analyze the page structure and the crawling logic, fix the issue, and crawl again.
+10. Only report completion when the counts match.
+11. Tell the user where the file was written and how many links were exported.
 
 ## Self-validation loop
 
@@ -290,6 +326,15 @@ Do not export:
 - login, share, print, search, or attachment controls unless they are the article link itself
 
 If a list item contains multiple links, prefer the primary article-detail link.
+
+For each exported link, include the corresponding article title:
+
+- Add a `title` string field to every output item.
+- Prefer the visible text of the primary article-detail link.
+- If the primary link text is empty or generic, use the nearest title element inside the same article-list item, such as a heading, title span, or title attribute.
+- Normalize title whitespace by trimming leading/trailing whitespace and collapsing repeated internal whitespace.
+- Keep the title tied to the same list item as the exported URL.
+- Do not open article-detail pages solely to fill or improve titles.
 
 ## Classification rules
 
@@ -383,8 +428,10 @@ User:
 
 Expected behavior:
 
-- split the crawl into batches when appropriate
+- split the crawl into batches of `5` pages when the target range has at least `5` pages
+- do not split into batches when the target range has fewer than `5` pages
 - persist progress between batches
+- wait through a randomized interval after completing each batch before starting the next batch
 - retry SSL or transient network failures
 - resume unfinished pages instead of restarting blindly
 - only finish when all target pages are complete and the final counts validate
