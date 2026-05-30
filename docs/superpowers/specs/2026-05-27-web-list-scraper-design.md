@@ -9,7 +9,7 @@ Create a skill that triggers when a user asks to scrape a site such as "为我�
 3. Crawl only article-list links from all list pages.
 4. Use conservative crawl pacing for every website: single-page traversal, randomized long sleeps after each page attempt, fixed 5-page batches when the target range has at least 5 pages, and randomized cooldowns between batches.
 5. Back off or stop when rate-limit or blocking signals appear instead of increasing crawl pressure.
-6. Validate that the exported link count matches the actual article-list count observed on the pages.
+6. Validate that the exported link count matches the actual article-list count observed on the pages, preferring a `playwright-stealth` rendered validation pass when available.
 7. If counts do not match, analyze the page structure and crawling logic, fix the issue, and crawl again.
 8. Write the final results to a JSON file named with the domain and timestamp.
 
@@ -26,8 +26,8 @@ It should:
 - Crawl list pages with concurrency `1` and add randomized long sleeps after every list-page attempt.
 - If the target range has fewer than `5` list pages, do not split it into batches.
 - If the target range has `5` or more list pages, use fixed batches of `5` pages.
-- Use a longer randomized cooldown after every completed batch before starting the next batch.
-- Validate the final extracted link count against the actual article-list count observed on the site.
+- Use a randomized `2-5 minutes` cooldown after every completed batch before starting the next batch.
+- Validate the final extracted link count against the actual article-list count observed on the site, preferring `playwright-stealth` for the post-crawl rendered validation pass when available.
 - Automatically diagnose and retry if the counts do not match.
 - Export a JSON array with `url`, `title`, `isOutLink`, `isFileLink`, and `isWechatLink`.
 
@@ -75,7 +75,7 @@ For every target website, the skill should require low-pressure crawling by defa
 - Use a default per-page sleep range such as `15-60 seconds` unless the user explicitly asks for a slower range.
 - If the target range has fewer than `5` list pages, do not split it into batches.
 - If the target range has `5` or more list pages, split it into batches of `5` pages each.
-- After every completed batch, wait through a longer randomized cooldown, such as `3-10 minutes`, before starting the next batch.
+- After every completed batch, wait through a randomized cooldown of `2-5 minutes` before starting the next batch.
 - Persist crawl progress before long sleeps and batch cooldowns so interrupted crawls can resume.
 - Avoid opening article-detail pages when the task only requires article-list links.
 
@@ -95,7 +95,7 @@ After analysis, the skill should:
 - Use concurrency `1` and apply the required randomized long sleep after every list-page attempt.
 - Use fixed batches of `5` pages when the target range has `5` or more list pages.
 - Do not split into batches when the target range has fewer than `5` list pages.
-- Wait through a randomized cooldown after completing each batch before starting the next batch.
+- Wait through a randomized `2-5 minutes` cooldown after completing each batch before starting the next batch.
 - Extract each article link and the corresponding article title from the same article-list item.
 - Deduplicate links.
 - Normalize each link to an absolute URL.
@@ -108,9 +108,19 @@ After analysis, the skill should:
 
 After a crawl pass, the skill should:
 
-- Count how many article entries actually appear in the article-list region across the crawled pages.
+- Reopen or re-render the crawled list pages for validation, preferring a `playwright-stealth` browser context when the dependency is available.
+- Count how many article entries actually appear in the article-list region across the validated rendered pages.
 - Count how many links were exported after normalization and deduplication.
 - Compare the two totals.
+
+Validation browser rules:
+
+- Prefer `playwright-stealth` for the post-crawl validation pass so the count is based on a fully rendered browser view.
+- Use the same target scope, same article-list region rule, same low-pressure pacing, and same batch/cooldown rules during validation.
+- Use `playwright-stealth` only to validate public article-list rendering and counts.
+- Do not use `playwright-stealth` to bypass login walls, CAPTCHA, paywalls, or access-control challenges.
+- If `playwright-stealth` is unavailable in the environment, fall back to ordinary Playwright rendered validation and mention the fallback in the final report.
+- If stealth validation and ordinary Playwright validation disagree, reinspect the rendered DOM and explain which rendered view appears authoritative before retrying or reporting a blocker.
 
 If the counts match, the task is complete.
 

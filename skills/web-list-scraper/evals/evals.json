@@ -102,7 +102,7 @@
       "expectations": [
         "The response uses 5-page batched crawling rather than assuming a single uninterrupted pass.",
         "The response maintains resumable progress state such as completed pages, failed pages, or batch progress.",
-        "The workflow waits through a randomized cooldown after each completed batch before starting the next batch.",
+        "The workflow waits through a randomized 2-5 minute cooldown after each completed batch before starting the next batch.",
         "The response treats SSL or transient network failures as retryable and resumable rather than immediate final failure.",
         "The response retries failed pages or unfinished batches instead of restarting blindly from zero.",
         "The workflow does not consider the task complete while unfinished pages remain or while exported count and actual article-list count still differ."
@@ -123,7 +123,7 @@
     {
       "id": 10,
       "prompt": "为我爬取 https://www.example.xxx/news/ 下的所有文章链接。为了避免封 IP，对任意网站都要低频爬取，每爬一页都增加一个随机的长 sleep；遇到 403、429、验证码或者空列表异常时不要继续猛爬，要退避或者停止说明。",
-      "expected_output": "The skill should apply low-pressure crawling to every site, use concurrency 1, add a randomized long sleep after every list-page attempt, use fixed 5-page batches when the target range has at least 5 pages, skip batching below 5 pages, use longer randomized cooldowns between batches, and back off or stop when rate-limit or blocking signals appear.",
+      "expected_output": "The skill should apply low-pressure crawling to every site, use concurrency 1, add a randomized long sleep after every list-page attempt, use fixed 5-page batches when the target range has at least 5 pages, skip batching below 5 pages, use randomized 2-5 minute cooldowns between batches, and back off or stop when rate-limit or blocking signals appear.",
       "files": [],
       "expectations": [
         "The response applies conservative pacing to every website rather than only to visibly protected sites.",
@@ -131,7 +131,7 @@
         "The workflow adds a randomized long sleep after every list-page attempt, including successful and failed pages.",
         "The workflow splits target ranges of 5 or more list pages into batches of 5 pages.",
         "The workflow does not split target ranges with fewer than 5 list pages into batches.",
-        "The workflow adds longer randomized cooldowns after every completed batch before crawling the next batch.",
+        "The workflow adds randomized 2-5 minute cooldowns after every completed batch before crawling the next batch.",
         "The workflow treats 403, 429, CAPTCHA, repeated empty lists, redirects, resets, and repeated timeouts as blocking or throttling signals.",
         "The workflow backs off with longer randomized waits or stops with a clear explanation instead of increasing crawl pressure.",
         "The workflow does not attempt to bypass login walls, CAPTCHA, paywalls, or access-control challenges."
@@ -154,14 +154,28 @@
     {
       "id": 12,
       "prompt": "为我爬取 https://www.example.xxx/list/ 下的所有文章链接。每五页为一批，每爬取完一批都等待一个随机间隔再去爬取另一批；如果总页数低于五页就不要分批。",
-      "expected_output": "The skill should split crawling into fixed 5-page batches when the target range has at least 5 pages, skip batching below 5 pages, persist progress after each batch, and wait through a randomized cooldown before continuing to the next batch.",
+      "expected_output": "The skill should split crawling into fixed 5-page batches when the target range has at least 5 pages, skip batching below 5 pages, persist progress after each batch, and wait through a randomized 2-5 minute cooldown before continuing to the next batch.",
       "files": [],
       "expectations": [
         "The workflow uses fixed batches of 5 list pages.",
         "The workflow does not create batches when the target page count is fewer than 5.",
         "The workflow persists progress after each completed batch.",
-        "The workflow waits through a randomized interval after each completed batch before starting the next batch.",
+        "The workflow waits through a randomized 2-5 minute interval after each completed batch before starting the next batch.",
         "The workflow still applies per-page randomized long sleep and concurrency 1."
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "爬取完成后，对结果进行验证时采用 playwright-stealth 的方式，确认导出的链接数量和网页文章列表中的实际文章数量一致。",
+      "expected_output": "The skill should prefer playwright-stealth for the post-crawl rendered validation pass, count actual article entries from the validated rendered list pages, compare that count with the exported deduplicated link count, and fall back to ordinary Playwright with a report note if playwright-stealth is unavailable.",
+      "files": [],
+      "expectations": [
+        "The post-crawl validation pass prefers a playwright-stealth browser context when available.",
+        "The validation counts actual article entries from the internally confirmed article-list region on rendered pages.",
+        "The validation compares rendered article-entry count with exported normalized deduplicated link count.",
+        "The validation keeps the same target scope, list-region rule, low-pressure pacing, and batch/cooldown rules.",
+        "The workflow falls back to ordinary Playwright rendered validation and reports the fallback if playwright-stealth is unavailable.",
+        "The workflow does not use playwright-stealth to bypass login walls, CAPTCHA, paywalls, or access-control challenges."
       ]
     }
   ]

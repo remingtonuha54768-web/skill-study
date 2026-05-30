@@ -11,7 +11,7 @@ This skill is intentionally split into analysis, crawl, and validation phases so
 
 1. Discover the article-list region internally and estimate the pagination range.
 2. Crawl the full article list and export links without pausing for user confirmation.
-3. Validate that the final exported link count matches the actual article-list count on the crawled pages.
+3. Validate that the final exported link count matches the actual article-list count on the crawled pages, preferring a `playwright-stealth` rendered verification pass when available.
 4. If the counts do not match, inspect the page and fix the crawling logic, then crawl again.
 
 ## What this skill should produce
@@ -61,7 +61,7 @@ Required pacing rules:
 - Use a default per-page sleep range of `15-60 seconds` unless the user explicitly asks for a slower range.
 - If the target range has fewer than `5` list pages, do not split it into batches.
 - If the target range has `5` or more list pages, split it into batches of `5` pages each.
-- After every completed batch, wait through a longer randomized cooldown, such as `3-10 minutes`, before starting the next batch.
+- After every completed batch, wait through a randomized cooldown of `2-5 minutes` before starting the next batch.
 - Randomize wait durations and avoid fixed request intervals.
 - Persist progress before long sleeps and batch cooldowns so the crawl can resume safely if interrupted.
 - Do not open article-detail pages when the requested output only needs article-list links.
@@ -134,7 +134,7 @@ When using batched crawling:
 3. Crawl one batch at a time.
 4. Apply the required randomized long sleep after each page attempt.
 5. After each batch, persist intermediate progress and accumulated results.
-6. Wait through a randomized batch cooldown before continuing unless the crawl is stopping.
+6. Wait through a randomized `2-5 minutes` batch cooldown before continuing unless the crawl is stopping.
 7. Continue with the next unfinished batch.
 
 Each batch should track:
@@ -271,7 +271,7 @@ After the analysis completes:
 5. Deduplicate links after normalization.
 6. Classify each link as `isOutLink`, `isFileLink`, and `isWechatLink`.
 7. Write the JSON file using the required filename pattern.
-8. Validate the exported link count against the actual article-list count observed across the crawled pages.
+8. Validate the exported link count against the actual article-list count observed across the crawled pages, using the validation rules below.
 9. If the counts do not match, analyze the page structure and the crawling logic, fix the issue, and crawl again.
 10. Only report completion when the counts match.
 11. Tell the user where the file was written and how many links were exported.
@@ -281,9 +281,19 @@ After the analysis completes:
 After each crawl pass:
 
 1. Check whether every intended page in the target range has been completed or recovered from the failed-page queue.
-2. Count the actual number of article entries in the internally confirmed article-list region across the crawled pages.
-3. Count the number of exported links after normalization and deduplication.
-4. Compare the two totals.
+2. Reopen or re-render the crawled list pages for validation, preferring a `playwright-stealth` browser context when the dependency is available.
+3. Count the actual number of article entries in the internally confirmed article-list region across the validated rendered pages.
+4. Count the number of exported links after normalization and deduplication.
+5. Compare the two totals.
+
+Validation browser rules:
+
+- Prefer `playwright-stealth` for the post-crawl validation pass so the count is based on a fully rendered browser view.
+- Use the same target scope, same article-list region rule, same low-pressure pacing, and same batch/cooldown rules during validation.
+- Use `playwright-stealth` only to validate public article-list rendering and counts.
+- Do not use `playwright-stealth` to bypass login walls, CAPTCHA, paywalls, or access-control challenges.
+- If `playwright-stealth` is unavailable in the environment, fall back to ordinary Playwright rendered validation and mention the fallback in the final report.
+- If stealth validation and ordinary Playwright validation disagree, reinspect the rendered DOM and explain which rendered view appears authoritative before retrying or reporting a blocker.
 
 If all target pages are complete and the counts are equal:
 
