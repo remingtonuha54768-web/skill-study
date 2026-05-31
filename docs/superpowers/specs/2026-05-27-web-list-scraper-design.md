@@ -7,7 +7,7 @@ Create a skill that triggers when a user asks to scrape a site such as "为我�
 1. Analyze the site, identify the article list region internally, and estimate the maximum page count.
 2. Use the estimated link count and other findings internally without pausing for user confirmation.
 3. Crawl only article-list links from all list pages.
-4. Use conservative crawl pacing for every website: single-page traversal, randomized long sleeps after each page attempt, varied inter-page interaction patterns, fixed 5-page batches when the target range has at least 5 pages, and randomized cooldowns between batches.
+4. Use conservative crawl pacing for every website: single-page traversal, randomized long sleeps after each page attempt, varied inter-page interaction patterns, and persist progress after each page.
 5. Apply browser fingerprint randomization (viewport, user-agent, locale, timezone) and natural human behavior simulation (scrolling, mouse movement) on every page in every phase.
 6. Perform warm-up browsing sessions on the site homepage before visiting target list pages in a fresh browser context.
 7. Detect and adapt to specific CDN/WAF protections (Cloudflare, Akamai, Incapsula, Sucuri).
@@ -29,13 +29,11 @@ It should:
 - Detect CDN/WAF protections (Cloudflare, Akamai, Incapsula, Sucuri) and adapt behavior accordingly.
 - Inspect the page structure and find a stable internal rule that isolates article-list items.
 - Infer the pagination pattern and maximum page count when possible.
-- Estimate the expected link count before batch extraction and use it internally.
+- Estimate the expected link count before extraction and use it internally.
 - Crawl list pages with concurrency `1` and add randomized long sleeps after every list-page attempt.
 - Vary inter-page interaction patterns to avoid repeating the same click-and-wait micro-pattern on every page transition.
-- If the target range has fewer than `5` list pages, do not split it into batches.
-- If the target range has `5` or more list pages, use fixed batches of `5` pages.
-- Use a randomized `2-5 minutes` cooldown after every completed batch before starting the next batch.
 - Rotate browser fingerprints (fresh context with different viewport/UA/locale) on persistent blocking after the first backoff round fails.
+- Persist progress after each page so the crawl can resume if interrupted.
 - Use Patchright (a standalone Playwright fork with built-in anti-detection, imported as `patchright`) as the primary execution strategy for analysis, crawling, and validation when the dependency is available.
 - Validate the final extracted link count against the actual article-list count observed on the site using a separate browser context with a different fingerprint from the crawl.
 - Automatically diagnose and retry if the counts do not match.
@@ -90,10 +88,7 @@ For every target website, the skill should require low-pressure crawling by defa
 - Add a randomized long sleep after every list-page attempt, including successful pages, failed pages, and pages that return no extracted links.
 - Vary the inter-page interaction pattern: sometimes scroll before clicking next-page, sometimes click directly, sometimes wait an extra 3-8 seconds before advancing.
 - Use a default per-page sleep range such as `15-60 seconds` unless the user explicitly asks for a slower range.
-- If the target range has fewer than `5` list pages, do not split it into batches.
-- If the target range has `5` or more list pages, split it into batches of `5` pages each.
-- After every completed batch, wait through a randomized cooldown of `2-5 minutes` before starting the next batch.
-- Persist crawl progress before long sleeps and batch cooldowns so interrupted crawls can resume.
+- Persist crawl progress before long sleeps so interrupted crawls can resume.
 - Avoid opening article-detail pages when the task only requires article-list links.
 
 When rate-limit or blocking signals appear, the skill should use Patchright to bypass them:
@@ -111,9 +106,7 @@ After analysis, the skill should:
 
 - Traverse only the internally confirmed article-list region across all pages.
 - Use concurrency `1` and apply the required randomized long sleep after every list-page attempt.
-- Use fixed batches of `5` pages when the target range has `5` or more list pages.
-- Do not split into batches when the target range has fewer than `5` list pages.
-- Wait through a randomized `2-5 minutes` cooldown after completing each batch before starting the next batch.
+- Persist progress after each page so the crawl can resume if interrupted.
 - Extract each article link and the corresponding article title from the same article-list item.
 - Deduplicate links.
 - Normalize each link to an absolute URL.
@@ -136,7 +129,7 @@ After a crawl pass, the skill should:
 Validation browser rules:
 
 - Prefer Patchright for the full workflow, including the post-crawl validation pass, so the count is based on the same fully rendered browser view used for crawling.
-- Use the same target scope, same article-list region rule, same low-pressure pacing, and same batch/cooldown rules during validation.
+- Use the same target scope, same article-list region rule, and same low-pressure pacing during validation.
 - Use Patchright for all article-list analysis, crawling, rendering, and count validation — including on sites with login walls, CAPTCHA, paywalls, and access-control challenges.
 - Leverage Patchright's anti-detection to ensure validation can bypass any protections and access the same pages the crawl accessed.
 - If Patchright is unavailable in the environment, fall back to ordinary Playwright rendered crawling and validation and mention the fallback in the final report.
@@ -199,7 +192,6 @@ Useful test prompts:
 - "请先估算这个站会抓到多少条文章链接，然后直接导出"
 - "导出完成后自动验证链接数量，不一致就分析并修复后重新爬取"
 - "为了避免封 IP，对任意网站都要低频爬取，每爬一页都增加随机长 sleep；遇到 403、429、验证码或者空列表异常时使用 Patchright 绕过限制继续爬取，不要停止"
-- "每五页为一批，每爬取完一批都等待一个随机间隔再去爬取另一批；低于五页不分批"
 - "为我爬取 news.example.com 下的所有文章链接。这个站有 Cloudflare 防护，使用 Patchright 绕过。先估算链接数，然后直接导出。"
 - "爬取 list.example.com 的文章链接。如果遇到 403 错误，使用 Patchright 更换浏览器指纹持续重试直到成功。"
 - "为我爬取 example.com 的文章列表。每次访问页面时都需要模拟真实用户行为：先等待渲染，然后缓慢滚动页面，移动鼠标，再提取链接。"

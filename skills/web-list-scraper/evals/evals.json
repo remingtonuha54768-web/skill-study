@@ -10,7 +10,7 @@
         "The response identifies this as an article-list scraping task and uses the skill workflow.",
         "The first phase determines an internal execution summary before exporting links.",
         "The execution summary includes the site domain, pagination style, maximum page count, and estimated link count or uncertainty note.",
-        "The workflow proceeds automatically without asking the user to confirm before batch extraction.",
+        "The workflow proceeds automatically without asking the user to confirm before extraction.",
         "The workflow includes a post-crawl validation step that compares exported link count against actual article-list count."
       ]
     },
@@ -96,15 +96,13 @@
     },
     {
       "id": 8,
-      "prompt": "为我爬取 https://www.example.xxx/archive/ 下的所有文章链接。这个栏目分页很多，内容量很大；如果中途网络不稳定或者出现 SSL 连接问题，不要直接失败，要分批爬、记录进度、断点续爬，把失败页重试补齐。只要还有没完成的页或者最终链接数和网页实际文章数对不上，就不要结束。",
-      "expected_output": "The skill should recognize this as a large-scope crawl that requires fixed 5-page batched execution, resumable progress tracking, retry handling for SSL or network failures, and a strict completion rule that forbids success while unfinished pages or validation mismatches remain.",
+      "prompt": "为我爬取 https://www.example.xxx/archive/ 下的所有文章链接。这个栏目分页很多，内容量很大；如果中途网络不稳定或者出现 SSL 连接问题，不要直接失败，要记录进度、断点续爬，把失败页重试补齐。只要还有没完成的页或者最终链接数和网页实际文章数对不上，就不要结束。",
+      "expected_output": "The skill should recognize this as a large-scope crawl that requires resumable progress tracking, retry handling for SSL or network failures, and a strict completion rule that forbids success while unfinished pages or validation mismatches remain.",
       "files": [],
       "expectations": [
-        "The response uses 5-page batched crawling rather than assuming a single uninterrupted pass.",
-        "The response maintains resumable progress state such as completed pages, failed pages, or batch progress.",
-        "The workflow waits through a randomized 2-5 minute cooldown after each completed batch before starting the next batch.",
+        "The response maintains resumable progress state such as completed pages and failed pages.",
         "The response treats SSL or transient network failures as retryable and resumable rather than immediate final failure.",
-        "The response retries failed pages or unfinished batches instead of restarting blindly from zero.",
+        "The response retries failed pages instead of restarting blindly from zero.",
         "The workflow does not consider the task complete while unfinished pages remain or while exported count and actual article-list count still differ."
       ]
     },
@@ -123,15 +121,13 @@
     {
       "id": 10,
       "prompt": "为我爬取 https://www.example.xxx/news/ 下的所有文章链接。为了避免封 IP，对任意网站都要低频爬取，每爬一页都增加一个随机的长 sleep；遇到 403、429、验证码或者空列表异常时，使用 Patchright 绕过限制继续爬取，不要停止。",
-      "expected_output": "The skill should apply low-pressure crawling to every site, use concurrency 1, add a randomized long sleep after every list-page attempt, use fixed 5-page batches when the target range has at least 5 pages, skip batching below 5 pages, use randomized 2-5 minute cooldowns between batches, and use Patchright to bypass rate-limit or blocking signals rather than stopping.",
+      "expected_output": "The skill should apply low-pressure crawling to every site, use concurrency 1, add a randomized long sleep after every list-page attempt, persist progress after each page, and use Patchright to bypass rate-limit or blocking signals rather than stopping.",
       "files": [],
       "expectations": [
         "The response applies conservative pacing to every website rather than only to visibly protected sites.",
         "The crawl uses single-page traversal or concurrency 1 for list pages.",
         "The workflow adds a randomized long sleep after every list-page attempt, including successful and failed pages.",
-        "The workflow splits target ranges of 5 or more list pages into batches of 5 pages.",
-        "The workflow does not split target ranges with fewer than 5 list pages into batches.",
-        "The workflow adds randomized 2-5 minute cooldowns after every completed batch before crawling the next batch.",
+        "The workflow persists progress after each page so the crawl can resume if interrupted.",
         "The workflow treats 403, 429, CAPTCHA, repeated empty lists, redirects, resets, and repeated timeouts as obstacles to bypass using Patchright rather than stop signals.",
         "The workflow uses Patchright fingerprint rotation, context refresh, and anti-detection techniques to overcome blocking signals instead of backing off.",
         "The workflow uses Patchright to bypass login walls, CAPTCHA, paywalls, and all access-control challenges — never stopping because of access restrictions.",
@@ -154,15 +150,14 @@
     },
     {
       "id": 12,
-      "prompt": "为我爬取 https://www.example.xxx/list/ 下的所有文章链接。每五页为一批，每爬取完一批都等待一个随机间隔再去爬取另一批；如果总页数低于五页就不要分批。",
-      "expected_output": "The skill should split crawling into fixed 5-page batches when the target range has at least 5 pages, skip batching below 5 pages, persist progress after each batch, and wait through a randomized 2-5 minute cooldown before continuing to the next batch.",
+      "prompt": "为我爬取 https://www.example.xxx/list/ 下的所有文章链接。每爬完一页都等待一个随机间隔再爬下一页，保持低频访问。",
+      "expected_output": "The skill should use concurrency 1, add a randomized long sleep after every list-page attempt, and persist progress after each page so the crawl can resume if interrupted.",
       "files": [],
       "expectations": [
-        "The workflow uses fixed batches of 5 list pages.",
-        "The workflow does not create batches when the target page count is fewer than 5.",
-        "The workflow persists progress after each completed batch.",
-        "The workflow waits through a randomized 2-5 minute interval after each completed batch before starting the next batch.",
-        "The workflow still applies per-page randomized long sleep and concurrency 1."
+        "The workflow uses concurrency 1 for page traversal.",
+        "The workflow adds a randomized long sleep after every list page attempt.",
+        "The workflow persists progress after each page.",
+        "The workflow varies inter-page interaction patterns to avoid repeating click-and-wait micro-patterns."
       ]
     },
     {
@@ -174,7 +169,7 @@
         "The workflow prefers a patchright browser context for analysis, crawling, and post-crawl validation when available.",
         "The validation counts actual article entries from the internally confirmed article-list region on rendered pages.",
         "The validation compares rendered article-entry count with exported normalized deduplicated link count.",
-        "The validation keeps the same target scope, list-region rule, low-pressure pacing, and batch/cooldown rules.",
+        "The validation keeps the same target scope, list-region rule, and low-pressure pacing.",
         "The workflow falls back to ordinary Playwright rendered crawling and validation and reports the fallback if patchright is unavailable.",
         "The workflow uses Patchright's anti-detection to bypass any access restrictions encountered during validation, including login walls, CAPTCHA, and paywalls.",
         "The validation phase uses a separate browser context with a different randomized fingerprint (viewport, user-agent, locale) from the crawl context to ensure independent access."

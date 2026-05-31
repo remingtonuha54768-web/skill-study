@@ -44,7 +44,7 @@ The task is only complete when the exported link count matches the actual articl
 - Prefer rendered-page inspection and realistic browsing behavior when the site is dynamic or mildly protected.
 - Fall back to ordinary Playwright only when `patchright` is unavailable or fails for reasons unrelated to site access.
 - For every website, use low-pressure crawling by default: single-page traversal, no parallel page fetching, and a randomized long sleep after every list page attempt.
-- When the crawl scope is large or the network is unstable, use batched crawling and resumable progress tracking rather than trying to finish everything in one pass.
+- When the crawl scope is large or the network is unstable, use resumable progress tracking rather than trying to finish everything in one pass.
 - Do not guess when the expected link count or maximum page count is uncertain.
 - If the crawl scope is too uncertain to execute reliably, stop and explain the uncertainty instead of pausing for confirmation.
 - After extraction, self-verify the exported link count against the actual article-list count.
@@ -60,12 +60,9 @@ Required pacing rules:
 - Crawl list pages with concurrency `1`.
 - Add a randomized long sleep after every list page attempt, including successful pages, failed pages, and pages with no extracted links.
 - Use a default per-page sleep range of `15-60 seconds` unless the user explicitly asks for a slower range.
-- If the target range has fewer than `5` list pages, do not split it into batches.
-- If the target range has `5` or more list pages, split it into batches of `5` pages each.
-- After every completed batch, wait through a randomized cooldown of `2-5 minutes` before starting the next batch.
 - Randomize wait durations and avoid fixed request intervals.
 - Vary the inter-page interaction pattern: sometimes scroll before clicking the next-page control, sometimes click directly, and sometimes wait an extra 3-8 seconds before advancing. Avoid repeating the exact same click-and-wait micro-pattern on every page transition.
-- Persist progress before long sleeps and batch cooldowns so the crawl can resume safely if interrupted.
+- Persist progress before long sleeps so the crawl can resume safely if interrupted.
 - Do not open article-detail pages when the requested output only needs article-list links.
 
 If the site shows rate-limit or blocking signals, use Patchright to bypass them and continue crawling:
@@ -119,7 +116,7 @@ Before visiting any target list page for analysis, crawling, or validation in a 
 
 This warm-up establishes session cookies, server-side session state, and a natural Referer header chain. It addresses detection signals that `patchright` alone does not cover.
 
-When continuing the crawl in the same browser context across multiple pages, the warm-up carries forward through the persistent session. Do not repeat the warm-up between every page of the same batch — only when starting a fresh context.
+When continuing the crawl in the same browser context across multiple pages, the warm-up carries forward through the persistent session. Do not repeat the warm-up between every page — only when starting a fresh context.
 
 ### Natural browsing behavior simulation
 
@@ -179,8 +176,8 @@ When the browser strategy is in use:
 - if useful, inspect the browser's real network responses to understand where list data is coming from
 - keep the crawl scoped to the user-requested domain or path even if the page loads auxiliary assets from elsewhere
 - keep one browser context for the crawl where practical so normal cookies and session state persist
-- verify that cookies and session state survive batch cooldowns; do not recycle or close the context mid-batch
-- still apply the default per-page randomized long sleep and batch cooldown rules
+- verify that cookies and session state survive across pages; do not recycle or close the context mid-crawl
+- still apply the default per-page randomized long sleep rules
 
 Do not fall back to direct request scraping unless it is clearly sufficient and more reliable for the current target.
 
@@ -192,9 +189,7 @@ When the target scope is large, the page count is high, or the network is unreli
 
 Instead:
 
-- split the crawl into fixed batches of `5` list pages when the target range has `5` or more pages
-- do not split into batches when the target range has fewer than `5` pages
-- persist progress after each batch
+- persist progress after each page
 - keep a retry queue for failed pages
 - resume from the last unfinished point instead of restarting from zero
 
@@ -205,37 +200,16 @@ Prefer this strategy when:
 - the site is slow or intermittently reachable
 - SSL, timeout, or transient network errors appear during the crawl
 
-## Batched crawling
-
-When using batched crawling:
-
-1. If the target page range has fewer than `5` list pages, crawl it as a single unbatched range.
-2. If the target page range has `5` or more list pages, divide it into batches of `5` pages each.
-3. Crawl one batch at a time.
-4. Apply the required randomized long sleep after each page attempt.
-5. After each batch, persist intermediate progress and accumulated results.
-6. Wait through a randomized `2-5 minutes` batch cooldown before continuing unless the crawl is stopping.
-7. Continue with the next unfinished batch.
-
-Each batch should track:
-
-- covered page range
-- pages completed successfully
-- pages that failed and need retry
-- current accumulated link count
-
-Do not treat a partially completed batch as final completion.
-
 ## Resumable progress tracking
 
 During long crawls, maintain resumable state so the crawl can continue after interruption.
 
 At minimum, track:
 
-- the current page or current batch range
+- the current page
 - the set of normalized links already collected
 - the list of failed pages
-- which page ranges are complete and which are still pending
+- which pages are complete and which are still pending
 - the current output filename or run timestamp
 
 If the crawl is interrupted, resume from the unfinished pages or failed-page queue instead of restarting the entire job unless the stored state is clearly invalid.
@@ -346,8 +320,7 @@ After the analysis completes:
    - Use `patchright` by default for rendered inspection and crawling when the dependency is available.
    - Perform a warm-up browsing session if starting a fresh browser context for the crawl.
    - Apply natural scrolling simulation before extracting links from each page.
-   - If the target range has `5` or more list pages, process it in batches of `5` pages and persist progress after each batch.
-   - If the target range has fewer than `5` list pages, do not split it into batches.
+   - Persist progress after each page so the crawl can resume if interrupted.
    - Always crawl with concurrency `1` and apply the default randomized long sleep after every list page attempt.
 2. Restrict extraction to anchors inside the internally confirmed article-list region.
 3. Extract the article title that corresponds to each exported link.
@@ -373,7 +346,7 @@ After each crawl pass:
 Validation browser rules:
 
 - Prefer Patchright for the full workflow, including the post-crawl validation pass, so the count is based on the same fully rendered browser view used for crawling.
-- Use the same target scope, same article-list region rule, same low-pressure pacing, and same batch/cooldown rules during validation.
+- Use the same target scope, same article-list region rule, and same low-pressure pacing during validation.
 - Use Patchright for all article-list analysis, crawling, rendering, and count validation — including on sites with login walls, CAPTCHA, paywalls, or access-control challenges.
 - Leverage Patchright's anti-detection to ensure validation can access the same pages the crawl accessed, bypassing any protections that may have been triggered during the crawl pass.
 - If Patchright is unavailable in the environment, fall back to ordinary Playwright rendered crawling and validation and mention the fallback in the final report.
@@ -387,7 +360,7 @@ When performing post-crawl validation, use a fresh browser context with an indep
 2. Wait 2-5 minutes before starting validation to avoid temporal clustering of the same-page requests.
 3. Create a fresh browser context with a different randomized viewport, user-agent, and locale than the crawl session.
 4. Perform a warm-up browsing session before visiting validation pages.
-5. Apply the same per-page sleep rules, natural scrolling behavior, and batch/cooldown rules during validation.
+5. Apply the same per-page sleep rules and natural scrolling behavior during validation.
 6. If the validation context encounters access restrictions, use the same Patchright bypass techniques as the crawl to overcome them.
 
 This isolation gives the validation pass an independent view of the site. If the crawl context was flagged by anti-bot systems, the fresh validation context with a different fingerprint can still access the pages for accurate count verification. If both contexts face blocking, apply Patchright bypass techniques independently to each.
@@ -409,10 +382,9 @@ If any target pages remain unfinished, or if the counts are not equal:
    - duplicate handling that collapses distinct article URLs incorrectly
    - direct-request scraping missing content that is visible in the browser
    - failing to click through load-more or interactive pagination states
-   - interrupted batches that were not resumed
    - SSL or network failures that prevented some pages from completing
 3. Fix the crawling logic.
-4. Retry failed pages and unfinished batches.
+4. Retry failed pages.
 5. Crawl again.
 6. Repeat the validation.
 
@@ -536,10 +508,8 @@ User:
 
 Expected behavior:
 
-- split the crawl into batches of `5` pages when the target range has at least `5` pages
-- do not split into batches when the target range has fewer than `5` pages
-- persist progress between batches
-- wait through a randomized interval after completing each batch before starting the next batch
+- crawl all list pages with concurrency `1` and randomized long sleeps
+- persist progress after each page so the crawl can resume if interrupted
 - retry SSL or transient network failures
 - resume unfinished pages instead of restarting blindly
 - only finish when all target pages are complete and the final counts validate
