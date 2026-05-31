@@ -59,9 +59,9 @@ Required pacing rules:
 
 - Crawl list pages with concurrency `1`.
 - Add a randomized long sleep after every list page attempt, including successful pages, failed pages, and pages with no extracted links.
-- Use a default per-page sleep range of `15-60 seconds` unless the user explicitly asks for a slower range.
+- Use a default per-page sleep range of `2-5 seconds` unless the user explicitly asks for a slower range.
 - Randomize wait durations and avoid fixed request intervals.
-- Vary the inter-page interaction pattern: sometimes scroll before clicking the next-page control, sometimes click directly, and sometimes wait an extra 3-8 seconds before advancing. Avoid repeating the exact same click-and-wait micro-pattern on every page transition.
+- Vary the inter-page interaction pattern: sometimes scroll before clicking the next-page control, sometimes click directly, and sometimes wait an extra 1-3 seconds before advancing. Avoid repeating the exact same click-and-wait micro-pattern on every page transition.
 - Persist progress before long sleeps so the crawl can resume safely if interrupted.
 - Do not open article-detail pages when the requested output only needs article-list links.
 
@@ -123,8 +123,8 @@ When continuing the crawl in the same browser context across multiple pages, the
 When using the browser strategy, simulate natural human browsing behavior on every page in every phase (analysis, crawling, validation):
 
 1. After the page loads, wait 1-3 seconds for initial rendering to settle.
-2. Scroll down the page gradually over 2-5 seconds using small incremental scroll steps rather than an instant jump to the bottom.
-3. Pause for 1-3 seconds after scrolling.
+2. Scroll down the page gradually over 1-2 seconds using small incremental scroll steps rather than an instant jump to the bottom.
+3. Pause for 0.5-1.5 seconds after scrolling.
 4. Move the mouse cursor in small semi-random increments within the viewport during any idle periods between interactions.
 5. Before extracting content, scroll back to the article-list region if needed.
 
@@ -357,7 +357,7 @@ Validation browser rules:
 When performing post-crawl validation, use a fresh browser context with an independent fingerprint to ensure unbiased verification:
 
 1. Close the crawl browser context after the crawl pass completes.
-2. Wait 2-5 minutes before starting validation to avoid temporal clustering of the same-page requests.
+2. Wait 30-90 seconds before starting validation to avoid temporal clustering of the same-page requests.
 3. Create a fresh browser context with a different randomized viewport, user-agent, and locale than the crawl session.
 4. Perform a warm-up browsing session before visiting validation pages.
 5. Apply the same per-page sleep rules and natural scrolling behavior during validation.
