@@ -82,16 +82,16 @@
     },
     {
       "id": 7,
-      "prompt": "为我爬取 https://www.example.xxx/news/ 下的所有文章链接。这个站前端渲染很重，而且直接请求经常拿不到完整列表；如果有反爬或者必须点击翻页、加载更多，就优先用 Playwright。先估算会抓到多少条，然后直接导出。",
-      "expected_output": "The skill should recognize this as a Playwright-first crawling scenario, prefer a browser-based flow over brittle direct requests, preserve the section URL as scope, and still keep the estimate-then-execute workflow before final extraction.",
+      "prompt": "为我爬取 https://www.example.xxx/news/ 下的所有文章链接。这个站前端渲染很重，而且直接请求经常拿不到完整列表；如果有反爬或者必须点击翻页、加载更多，就优先用 patchright。先估算会抓到多少条，然后直接导出。",
+      "expected_output": "The skill should recognize this as a patchright-first crawling scenario, prefer a rendered browser flow over brittle direct requests when the dependency is available, preserve the section URL as scope, and still keep the estimate-then-execute workflow before final extraction.",
       "files": [],
       "expectations": [
-        "The response recognizes that heavy client-side rendering or anti-bot behavior should trigger a Playwright-first strategy.",
-        "The response prefers browser-based inspection and crawling rather than request-only extraction.",
+        "The response recognizes that heavy client-side rendering or anti-bot behavior should trigger a patchright-first strategy when available.",
+        "The response prefers rendered browser-based inspection and crawling rather than request-only extraction.",
         "The response keeps the crawl limited to the supplied section URL instead of broadening scope.",
         "The response prefers determining maximum page count by following real next-page behavior when available.",
         "The response still provides or uses an estimated link count step before export without waiting for confirmation.",
-        "The workflow retains post-crawl count validation even when Playwright is the main strategy."
+        "The workflow retains post-crawl count validation even when patchright is the main strategy."
       ]
     },
     {
@@ -122,8 +122,8 @@
     },
     {
       "id": 10,
-      "prompt": "为我爬取 https://www.example.xxx/news/ 下的所有文章链接。为了避免封 IP，对任意网站都要低频爬取，每爬一页都增加一个随机的长 sleep；遇到 403、429、验证码或者空列表异常时不要继续猛爬，要退避或者停止说明。",
-      "expected_output": "The skill should apply low-pressure crawling to every site, use concurrency 1, add a randomized long sleep after every list-page attempt, use fixed 5-page batches when the target range has at least 5 pages, skip batching below 5 pages, use randomized 2-5 minute cooldowns between batches, and back off or stop when rate-limit or blocking signals appear.",
+      "prompt": "为我爬取 https://www.example.xxx/news/ 下的所有文章链接。为了避免封 IP，对任意网站都要低频爬取，每爬一页都增加一个随机的长 sleep；遇到 403、429、验证码或者空列表异常时，使用 Patchright 绕过限制继续爬取，不要停止。",
+      "expected_output": "The skill should apply low-pressure crawling to every site, use concurrency 1, add a randomized long sleep after every list-page attempt, use fixed 5-page batches when the target range has at least 5 pages, skip batching below 5 pages, use randomized 2-5 minute cooldowns between batches, and use Patchright to bypass rate-limit or blocking signals rather than stopping.",
       "files": [],
       "expectations": [
         "The response applies conservative pacing to every website rather than only to visibly protected sites.",
@@ -132,9 +132,10 @@
         "The workflow splits target ranges of 5 or more list pages into batches of 5 pages.",
         "The workflow does not split target ranges with fewer than 5 list pages into batches.",
         "The workflow adds randomized 2-5 minute cooldowns after every completed batch before crawling the next batch.",
-        "The workflow treats 403, 429, CAPTCHA, repeated empty lists, redirects, resets, and repeated timeouts as blocking or throttling signals.",
-        "The workflow backs off with longer randomized waits or stops with a clear explanation instead of increasing crawl pressure.",
-        "The workflow does not attempt to bypass login walls, CAPTCHA, paywalls, or access-control challenges."
+        "The workflow treats 403, 429, CAPTCHA, repeated empty lists, redirects, resets, and repeated timeouts as obstacles to bypass using Patchright rather than stop signals.",
+        "The workflow uses Patchright fingerprint rotation, context refresh, and anti-detection techniques to overcome blocking signals instead of backing off.",
+        "The workflow uses Patchright to bypass login walls, CAPTCHA, paywalls, and all access-control challenges — never stopping because of access restrictions.",
+        "The workflow applies human behavior simulation (warm-up browsing, randomized viewport and browser fingerprint, natural scrolling) as part of the crawl pacing for every site."
       ]
     },
     {
@@ -166,16 +167,59 @@
     },
     {
       "id": 13,
-      "prompt": "爬取完成后，对结果进行验证时采用 playwright-stealth 的方式，确认导出的链接数量和网页文章列表中的实际文章数量一致。",
-      "expected_output": "The skill should prefer playwright-stealth for the post-crawl rendered validation pass, count actual article entries from the validated rendered list pages, compare that count with the exported deduplicated link count, and fall back to ordinary Playwright with a report note if playwright-stealth is unavailable.",
+      "prompt": "爬取完成后，对结果进行验证时采用 patchright 的方式，确认导出的链接数量和网页文章列表中的实际文章数量一致。",
+      "expected_output": "The skill should prefer patchright for analysis, crawling, and the post-crawl rendered validation pass, count actual article entries from the validated rendered list pages, compare that count with the exported deduplicated link count, and fall back to ordinary Playwright with a report note if patchright is unavailable.",
       "files": [],
       "expectations": [
-        "The post-crawl validation pass prefers a playwright-stealth browser context when available.",
+        "The workflow prefers a patchright browser context for analysis, crawling, and post-crawl validation when available.",
         "The validation counts actual article entries from the internally confirmed article-list region on rendered pages.",
         "The validation compares rendered article-entry count with exported normalized deduplicated link count.",
         "The validation keeps the same target scope, list-region rule, low-pressure pacing, and batch/cooldown rules.",
-        "The workflow falls back to ordinary Playwright rendered validation and reports the fallback if playwright-stealth is unavailable.",
-        "The workflow does not use playwright-stealth to bypass login walls, CAPTCHA, paywalls, or access-control challenges."
+        "The workflow falls back to ordinary Playwright rendered crawling and validation and reports the fallback if patchright is unavailable.",
+        "The workflow uses Patchright's anti-detection to bypass any access restrictions encountered during validation, including login walls, CAPTCHA, and paywalls.",
+        "The validation phase uses a separate browser context with a different randomized fingerprint (viewport, user-agent, locale) from the crawl context to ensure independent access."
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "为我爬取 http://www.example.xxx/news/ 下的所有文章链接。这个站有 Cloudflare 防护，注意识别并处理。先估算链接数，然后直接导出。",
+      "expected_output": "The skill should detect Cloudflare WAF protection during analysis, apply patchright with randomized browser fingerprint, handle JS challenge interstitials by waiting naturally, record the WAF in the execution summary, and continue with the full crawl-and-validate workflow.",
+      "files": [],
+      "expectations": [
+        "The response detects and identifies the Cloudflare WAF based on response headers or page content.",
+        "The response records WAF detection in the execution summary.",
+        "The workflow uses patchright with randomized viewport and browser fingerprint.",
+        "The workflow waits for Cloudflare JS challenge interstitials to resolve naturally without reloading or navigating during the challenge.",
+        "The workflow uses Patchright to bypass Cloudflare challenges including JS interstitials and Turnstile CAPTCHA widgets.",
+        "The workflow still requires post-crawl count validation before completion."
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "爬取 https://www.example.xxx/list/ 的文章链接。如果遇到 403 错误，使用 Patchright 更换浏览器指纹持续重试被屏蔽的页面，直到成功为止。",
+      "expected_output": "The skill should immediately rotate browser fingerprints on 403 errors, close the blocked browser context, create a fresh context with a different randomized viewport/user-agent/locale, perform a new warm-up, and retry persistently until the page is accessible — with no limit on fingerprint rotations.",
+      "files": [],
+      "expectations": [
+        "The response treats 403 as an obstacle to bypass using Patchright rather than a stop signal.",
+        "The workflow closes the blocked browser context entirely before retrying.",
+        "The workflow creates a fresh browser context with a different randomized viewport, user-agent, and locale.",
+        "The workflow performs a new warm-up browsing session before retrying the blocked page.",
+        "Fingerprint rotation is applied persistently with no limit — the workflow keeps rotating and retrying until the page is accessible.",
+        "The workflow uses fingerprint rotation to bypass all access restrictions including login walls, CAPTCHA, and WAF protections."
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "为我爬取 example.com 的文章列表。每次访问页面时都需要模拟真实用户行为：先等待渲染，然后缓慢滚动页面，移动鼠标，再提取链接。",
+      "expected_output": "The skill should apply natural human behavior simulation on every page in every phase: wait for rendering, gradual scrolling, mouse movement in the viewport, and only then extract content. This should apply to analysis, crawling, and validation phases.",
+      "files": [],
+      "expectations": [
+        "The workflow simulates natural scrolling on every page before extracting content.",
+        "The workflow waits 1-3 seconds for initial rendering after page load.",
+        "The workflow scrolls down gradually over 2-5 seconds rather than jumping instantly.",
+        "The workflow includes mouse cursor movement simulation during idle periods.",
+        "Natural browsing behavior is applied in all phases (analysis, crawling, validation).",
+        "The scrolling and idle pauses occur within the mandatory per-page sleep window, not in addition to it."
       ]
     }
   ]
